@@ -80,13 +80,14 @@ Right-click `config.json`, choose **Open with** and pick **Notepad**. Each entry
 
 Gamma `1` is normal. Values above `1` brighten the screen and values below `1` darken it. Save the
 file and restart `osu-gamma-controller.exe` for the changes to apply. Keep the commas and brackets as
-they are; if the program closes immediately after a change, there's probably a typo in the file.
+they are; if the program shows an error about the config after a change, there's probably a typo in
+the file.
 
 ### Troubleshooting
 
-- **The window closes immediately.** The program hit an error. To see it, open the folder, click the
-  address bar at the top of the File Explorer window, type `cmd` and press Enter. In the window that
-  opens, type `osu-gamma-controller.exe` and press Enter. The error message stays visible.
+- **The window says "Press Enter to close this window...".** The program couldn't start. The line
+  above it explains why, for example a typo in `config.json` or a missing `config.json` next to the
+  `.exe`.
 - **The gamma doesn't change, or strong values like `0.3` or `6.5` don't work.** Make sure you did
   [step 2](#2-allow-strong-gamma-values-one-time-only) **and restarted your computer** afterwards.
 - **The screen stays dark or bright after the program closed.** Start it again and close it

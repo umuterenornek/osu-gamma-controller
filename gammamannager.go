@@ -213,7 +213,9 @@ func main() {
 
 	gm, err := NewGammaManager(configPath)
 	if err != nil {
-		log.Fatalf("Failed to create gamma manager: %v", err)
+		log.Printf("Failed to create gamma manager: %v", err)
+		pauseBeforeExit()
+		os.Exit(1)
 	}
 
 	c := make(chan os.Signal, 1)
