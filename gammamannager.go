@@ -13,7 +13,13 @@ import (
 	"github.com/gorilla/websocket"
 )
 
+// gameStatePlay is tosu's state number for gameplay (GameState.play).
+const gameStatePlay = 2
+
 type OSUResponse struct {
+	State struct {
+		Number int `json:"number"`
+	} `json:"state"`
 	Beatmap struct {
 		Stats struct {
 			AR struct {
@@ -31,6 +37,9 @@ type ARRange struct {
 
 type Config struct {
 	ARMappings []ARRange `json:"ar_mappings"`
+	// OnlyWhilePlaying applies the AR gamma only during gameplay and keeps gamma at 1 elsewhere
+	// (song select, results, ...). By default gamma follows the selected beatmap everywhere.
+	OnlyWhilePlaying bool `json:"only_while_playing"`
 	// Backend selects how gamma is changed: "auto" (default), or on Linux "wlr", "kwin" or "x11".
 	Backend string `json:"backend"`
 }
@@ -39,6 +48,7 @@ type GammaManager struct {
 	conn        *websocket.Conn
 	done        chan struct{}
 	lastARValue float64
+	wasPlaying  bool
 	lastGamma   float64
 	config      *Config
 	gamma       GammaSetter
@@ -55,6 +65,9 @@ func NewGammaManager(configPath string) (*GammaManager, error) {
 		return nil, fmt.Errorf("failed to initialize gamma control: %v", err)
 	}
 	log.Printf("Using gamma backend: %s", gamma.Name())
+	if config.OnlyWhilePlaying {
+		log.Println("Gamma is only changed during gameplay (only_while_playing)")
+	}
 
 	return &GammaManager{
 		done:        make(chan struct{}),
@@ -155,10 +168,15 @@ func (gm *GammaManager) readAndProcess() {
 		gm.conn.Close()
 		gm.conn = nil
 		gm.lastARValue = -1
+		gm.wasPlaying = false
 		log.Println("Connection lost, will attempt to reconnect...")
 		return
 	}
 
+	gm.process(message)
+}
+
+func (gm *GammaManager) process(message []byte) {
 	var response OSUResponse
 	if err := json.Unmarshal(message, &response); err != nil {
 		log.Printf("Error parsing JSON response: %v", err)
@@ -166,11 +184,31 @@ func (gm *GammaManager) readAndProcess() {
 	}
 
 	arValue := response.Beatmap.Stats.AR.Converted
-	if arValue == gm.lastARValue {
+	arChanged := arValue != gm.lastARValue
+	if arChanged {
+		log.Printf("AR value changed: %f -> %f", gm.lastARValue, arValue)
+		gm.lastARValue = arValue
+	}
+
+	if gm.config.OnlyWhilePlaying {
+		playing := response.State.Number == gameStatePlay
+		if playing != gm.wasPlaying {
+			gm.wasPlaying = playing
+			if playing {
+				log.Println("Gameplay started")
+			} else {
+				log.Println("Gameplay ended, resetting gamma to 1")
+			}
+		} else if !arChanged {
+			return
+		}
+		if !playing {
+			gm.adjustGamma(1)
+			return
+		}
+	} else if !arChanged {
 		return
 	}
-	log.Printf("AR value changed: %f -> %f", gm.lastARValue, arValue)
-	gm.lastARValue = arValue
 
 	mappedValue, err := gm.mapARValue(arValue)
 	if err != nil {

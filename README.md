@@ -87,6 +87,14 @@ file and restart `osu-gamma-controller.exe` for the changes to apply. Keep the c
 they are; if the program shows an error about the config after a change, there's probably a typo in
 the file.
 
+By default the gamma changes as soon as you select a map in song select. To change it only while
+you're actually playing a map, and keep normal gamma in menus, song select and the results screen,
+set this at the top of the file:
+
+```json
+"only_while_playing": true,
+```
+
 ### Troubleshooting
 
 - **The window says "Press Enter to close this window...".** The program couldn't start. The line
