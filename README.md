@@ -8,6 +8,9 @@ It reads the current beatmap from [tosu](https://github.com/tosuapp/tosu), so to
 alongside osu!. Your normal gamma is restored when you close the program, and while osu!/tosu isn't
 running.
 
+> This is an unofficial fan-made tool. It is not affiliated with or endorsed by ppy Pty Ltd, the
+> makers of osu!. "osu!" is a trademark of ppy Pty Ltd.
+
 ## Installing and using (Windows)
 
 ### 1. Download
