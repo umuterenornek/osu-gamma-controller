@@ -1,0 +1,6 @@
+Windows Registry Editor Version 5.00
+
+; Lets programs set gamma values far from the default (needed for values like 0.3 or 6.5).
+; Restart the computer after importing this file.
+[HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Windows NT\CurrentVersion\ICM]
+"GdiIcmGammaRange"=dword:00000100

@@ -1,0 +1,90 @@
+name: Build and release
+
+on:
+  push:
+    branches: [main]
+    tags: ["v*"]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: Build ${{ matrix.goos }}-${{ matrix.goarch }}
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        include:
+          - { goos: windows, goarch: amd64 }
+          - { goos: windows, goarch: arm64 }
+          - { goos: linux, goarch: amd64 }
+          - { goos: linux, goarch: arm64 }
+    env:
+      GOOS: ${{ matrix.goos }}
+      GOARCH: ${{ matrix.goarch }}
+      CGO_ENABLED: "0"
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+
+      - name: Vet
+        run: go vet ./...
+
+      - name: Build
+        run: |
+          # Only files for the target platform are compiled (build tags / _linux, _windows
+          # suffixes); -trimpath and -s -w strip local paths and debug info from the binary.
+          name=osu-gamma-controller
+          [ "$GOOS" = windows ] && ext=.exe || ext=
+          dist="${name}-${GOOS}-${GOARCH}"
+          mkdir -p "dist/$dist"
+          go build -trimpath -ldflags "-s -w" -o "dist/$dist/${name}${ext}" .
+          cp config.json "dist/$dist/"
+          [ "$GOOS" = windows ] && cp packaging/windows/*.reg "dist/$dist/"
+          echo "DIST=$dist" >> "$GITHUB_ENV"
+
+      - name: Package
+        working-directory: dist
+        run: |
+          if [ "$GOOS" = windows ]; then
+            (cd "$DIST" && zip -9 "../$DIST.zip" *)
+          else
+            tar -czf "$DIST.tar.gz" "$DIST"
+          fi
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{ env.DIST }}
+          path: dist/${{ env.DIST }}.*
+          if-no-files-found: error
+
+  release:
+    name: Publish release
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
+
+      - name: Checksums
+        working-directory: dist
+        run: sha256sum * > SHA256SUMS.txt
+
+      - name: Create release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "$GITHUB_REF_NAME" dist/* \
+            --repo "$GITHUB_REPOSITORY" \
+            --title "$GITHUB_REF_NAME" \
+            --generate-notes
