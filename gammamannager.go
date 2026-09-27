@@ -6,7 +6,6 @@ import (
 	"log"
 	"net/url"
 	"os"
-	"os/exec"
 	"os/signal"
 	"syscall"
 	"time"
@@ -32,13 +31,17 @@ type ARRange struct {
 
 type Config struct {
 	ARMappings []ARRange `json:"ar_mappings"`
+	// Backend selects how gamma is changed: "auto" (default), or on Linux "wlr", "kwin" or "x11".
+	Backend string `json:"backend"`
 }
 
 type GammaManager struct {
 	conn        *websocket.Conn
 	done        chan struct{}
 	lastARValue float64
+	lastGamma   float64
 	config      *Config
+	gamma       GammaSetter
 }
 
 func NewGammaManager(configPath string) (*GammaManager, error) {
@@ -47,10 +50,18 @@ func NewGammaManager(configPath string) (*GammaManager, error) {
 		return nil, fmt.Errorf("failed to load config: %v", err)
 	}
 
+	gamma, err := newGammaSetter(config.Backend)
+	if err != nil {
+		return nil, fmt.Errorf("failed to initialize gamma control: %v", err)
+	}
+	log.Printf("Using gamma backend: %s", gamma.Name())
+
 	return &GammaManager{
 		done:        make(chan struct{}),
 		lastARValue: -1,
+		lastGamma:   1,
 		config:      config,
+		gamma:       gamma,
 	}, nil
 }
 
@@ -63,6 +74,12 @@ func loadConfig(configPath string) (*Config, error) {
 	var config Config
 	if err := json.Unmarshal(data, &config); err != nil {
 		return nil, err
+	}
+
+	for _, mapping := range config.ARMappings {
+		if err := validateGamma(mapping.Value); err != nil {
+			return nil, fmt.Errorf("AR mapping %v-%v: %v", mapping.Min, mapping.Max, err)
+		}
 	}
 
 	return &config, nil
@@ -133,10 +150,11 @@ func (gm *GammaManager) readAndProcess() {
 	_, message, err := gm.conn.ReadMessage()
 	if err != nil {
 		log.Printf("Error reading from websocket: %v", err)
-		log.Println("Executing command with value 1 due to connection loss...")
+		log.Println("Resetting gamma to 1 due to connection loss...")
 		gm.adjustGamma(1)
 		gm.conn.Close()
 		gm.conn = nil
+		gm.lastARValue = -1
 		log.Println("Connection lost, will attempt to reconnect...")
 		return
 	}
@@ -164,26 +182,26 @@ func (gm *GammaManager) readAndProcess() {
 }
 
 func (gm *GammaManager) adjustGamma(mappedValue float64) {
-	valueString := fmt.Sprintf("%f", mappedValue)
-	cmd := exec.Command("xgamma", "-gamma", valueString)
-	cmd.Stdout = os.Stdout
-	cmd.Stderr = os.Stderr
-
-	err := cmd.Run()
-	if err != nil {
-		log.Printf("Error executing command: %v", err)
-	} else {
-		log.Printf("Successfully changed gamma to %s", valueString)
+	if mappedValue == gm.lastGamma {
+		return
 	}
+	if err := gm.gamma.Set(mappedValue); err != nil {
+		log.Printf("Error changing gamma: %v", err)
+		return
+	}
+	gm.lastGamma = mappedValue
+	log.Printf("Successfully changed gamma to %f", mappedValue)
 }
 
 func (gm *GammaManager) Stop() {
-	log.Println("Resetting gamma to 1...")
-	gm.adjustGamma(1)
-
 	close(gm.done)
 	if gm.conn != nil {
 		gm.conn.Close()
+	}
+
+	log.Println("Restoring original gamma...")
+	if err := gm.gamma.Close(); err != nil {
+		log.Printf("Error restoring gamma: %v", err)
 	}
 }
 
