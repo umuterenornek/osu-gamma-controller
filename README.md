@@ -29,6 +29,7 @@ The folder contains:
 | `osu-gamma-controller.exe` | The program |
 | `config.json` | Your settings: which AR gets which gamma |
 | `enable-full-gamma-range.reg` | A one-time Windows setting, see the next step |
+| `LICENSE`, `THIRD_PARTY_LICENSES.txt` | License texts; you don't need to do anything with these |
 
 ### 2. Allow strong gamma values (one time only)
 
@@ -164,4 +165,11 @@ git tag v1.0.0
 git push origin v1.0.0
 ```
 
-Each archive contains only the stripped binary and `config.json`, plus the `.reg` file on Windows.
+Each archive contains only the stripped binary, `config.json`, `LICENSE` and a
+`THIRD_PARTY_LICENSES.txt` covering the Go runtime and the modules compiled into that platform's
+binary, plus the `.reg` file on Windows.
+
+## License
+
+[MIT](LICENSE). Third-party dependencies are under their own licenses (BSD-style); release archives
+include their texts in `THIRD_PARTY_LICENSES.txt`.

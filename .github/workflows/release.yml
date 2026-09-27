@@ -44,9 +44,22 @@ jobs:
           dist="${name}-${GOOS}-${GOARCH}"
           mkdir -p "dist/$dist"
           go build -trimpath -ldflags "-s -w" -o "dist/$dist/${name}${ext}" .
-          cp config.json "dist/$dist/"
+          cp config.json LICENSE "dist/$dist/"
           [ "$GOOS" = windows ] && cp packaging/windows/*.reg "dist/$dist/"
           echo "DIST=$dist" >> "$GITHUB_ENV"
+
+      - name: Third-party licenses
+        run: |
+          # License texts of the Go runtime and of every module compiled into this platform's binary.
+          {
+            echo "=== Go (standard library and runtime)"
+            cat "$(go env GOROOT)/LICENSE"
+            go list -deps -f '{{with .Module}}{{if not .Main}}{{.Path}} {{.Dir}}{{end}}{{end}}' . | sort -u |
+              while read -r path dir; do
+                printf '\n=== %s\n' "$path"
+                cat "$dir"/LICENSE*
+              done
+          } > "dist/$DIST/THIRD_PARTY_LICENSES.txt"
 
       - name: Package
         working-directory: dist
